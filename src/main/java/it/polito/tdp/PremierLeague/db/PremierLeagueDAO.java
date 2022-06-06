@@ -6,10 +6,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 import it.polito.tdp.PremierLeague.model.Action;
+import it.polito.tdp.PremierLeague.model.Adiacenza;
 import it.polito.tdp.PremierLeague.model.Match;
 import it.polito.tdp.PremierLeague.model.Player;
 import it.polito.tdp.PremierLeague.model.Team;
+
 
 public class PremierLeagueDAO {
 	
@@ -109,6 +113,61 @@ public class PremierLeagueDAO {
 			e.printStackTrace();
 			return null;
 		}
+	}
+	
+	public void giocatoriPartita(Map<Integer,Player>idMap, Match m){
+		String sql ="SELECT p.PlayerID, p.Name "
+				+ "FROM actions a, players p "
+				+ "WHERE a.PlayerID = p.PlayerID "
+				+ "AND a.MatchID = ?";
+		
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, m.getMatchID());
+			ResultSet rs = st.executeQuery();
+			
+			while(rs.next()) {
+				if(!idMap.containsKey(rs.getInt("PlayerID"))) {
+					Player p = new Player(rs.getInt("PlayerID"),rs.getString("Name"));
+					idMap.put(p.getPlayerID(), p);
+				}
+			}
+			conn.close();
+			
+		}catch(SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+		
+	}
+	
+	public List<Adiacenza> getArchi(Match m, Map<Integer,Player>idMap){
+		String sql ="SELECT a1.PlayerID as p1, a2.PlayerID as p2, ABS (((a1.TotalSuccessfulPassesAll+ a1.Assists)/ a1.TimePlayed)-((a2.TotalSuccessfulPassesAll+ a2.Assists)/ a2.TimePlayed))AS e "
+				+ "FROM actions a1, actions a2 "
+				+ "WHERE a1.PlayerID > a2.PlayerID "
+				+ "AND a1.MatchID = ? AND a1.MatchID = a2.MatchID "
+				+ "AND a1.TeamID != a2.TeamID";
+		List<Adiacenza> result = new ArrayList<>();
+		
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, m.getMatchID());
+			ResultSet rs = st.executeQuery();
+			
+			while(rs.next()) {
+			  result.add(new Adiacenza(idMap.get(rs.getInt("p1")),idMap.get(rs.getInt("p2")),rs.getInt("e")));
+			}
+			conn.close();
+			
+		}catch(SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+		return result;
 	}
 	
 }
