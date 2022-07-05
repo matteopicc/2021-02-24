@@ -17,25 +17,24 @@ import it.polito.tdp.PremierLeague.model.Team;
 
 public class PremierLeagueDAO {
 	
-	public List<Player> listAllPlayers(){
+	public void listAllPlayers(Map<Integer,Player> idMap){
 		String sql = "SELECT * FROM Players";
-		List<Player> result = new ArrayList<Player>();
 		Connection conn = DBConnect.getConnection();
 
 		try {
 			PreparedStatement st = conn.prepareStatement(sql);
 			ResultSet res = st.executeQuery();
 			while (res.next()) {
+				if(!idMap.containsKey(res.getInt("PlayerID"))) {
+					Player player = new Player(res.getInt("PlayerID"), res.getString("Name"));
+					idMap.put(player.getPlayerID(), player);
+				}
 
-				Player player = new Player(res.getInt("PlayerID"), res.getString("Name"));
-				result.add(player);
 			}
 			conn.close();
-			return result;
 			
 		} catch (SQLException e) {
 			e.printStackTrace();
-			return null;
 		}
 	}
 	
@@ -86,28 +85,23 @@ public class PremierLeagueDAO {
 		}
 	}
 	
-	public List<Match> listAllMatches(){
-		String sql = "SELECT m.MatchID, m.TeamHomeID, m.TeamAwayID, m.teamHomeFormation, m.teamAwayFormation, m.resultOfTeamHome, m.date, t1.Name, t2.Name   "
-				+ "FROM Matches m, Teams t1, Teams t2 "
-				+ "WHERE m.TeamHomeID = t1.TeamID AND m.TeamAwayID = t2.TeamID";
-		List<Match> result = new ArrayList<Match>();
+	public Team getTeamByID(int id) {
+		String sql="SELECT * "
+				+ "FROM teams "
+				+ "WHERE teams.TeamID = ?";
 		Connection conn = DBConnect.getConnection();
-
 		try {
 			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, id);
 			ResultSet res = st.executeQuery();
+			Team team = null;
 			while (res.next()) {
 
-				
-				Match match = new Match(res.getInt("m.MatchID"), res.getInt("m.TeamHomeID"), res.getInt("m.TeamAwayID"), res.getInt("m.teamHomeFormation"), 
-							res.getInt("m.teamAwayFormation"),res.getInt("m.resultOfTeamHome"), res.getTimestamp("m.date").toLocalDateTime(), res.getString("t1.Name"),res.getString("t2.Name"));
-				
-				
-				result.add(match);
+			 team = new Team(res.getInt("TeamID"), res.getString("Name"));
 
 			}
 			conn.close();
-			return result;
+			return team;
 			
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -115,59 +109,92 @@ public class PremierLeagueDAO {
 		}
 	}
 	
-	public void giocatoriPartita(Map<Integer,Player>idMap, Match m){
-		String sql ="SELECT p.PlayerID, p.Name "
-				+ "FROM actions a, players p "
-				+ "WHERE a.PlayerID = p.PlayerID "
-				+ "AND a.MatchID = ?";
+	public List<Match> getAllMatches(){
+		String sql="SELECT * "
+				+ "FROM matches";
+		List<Match> result = new ArrayList<Match>();
+		Connection conn = DBConnect.getConnection();
 		
 		try {
-			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet res = st.executeQuery();
+			while(res.next()) {
+				Team casa = this.getTeamByID(res.getInt("TeamHomeID"));
+				Team trasferta = this.getTeamByID(res.getInt("TeamAwayID"));
+				Match match = new Match(res.getInt("MatchID"),res.getInt("TeamHomeID"),res.getInt("TeamAwayID"),res.getInt("TeamHomeFormation"),res.getInt("TeamAwayFormation"),res.getInt("ResultOfTeamHome"),res.getTimestamp("Date").toLocalDateTime(),casa.getName(),trasferta.getName());
+				result.add(match);
+			}
+			conn.close();
+			return result;
+			
+		}catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		}	
+	}
+	
+	
+	public List<Player> playersMatch(Match match){
+		String sql="SELECT p.PlayerID AS id , p.Name AS nome "
+				+ "FROM actions a, players p "
+				+ "WHERE a.PlayerID = p.PlayerID AND a.MatchID= ? "
+				+ "GROUP BY p.PlayerID,p.Name";
+		List<Player> result = new ArrayList<>();
+		Connection conn = DBConnect.getConnection();
+		
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, match.getMatchID());
+			ResultSet res = st.executeQuery();
+			while(res.next()) {
+				Player player = new Player(res.getInt("id"),res.getString("nome"));
+				result.add(player);
+			}
+			conn.close();
+			return result;
+			
+		}catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		}	
+		
+	}
+	
+	
+	
+	public List<Adiacenza> getAdiacenze(Match m, Map<Integer,Player> idMap){
+		String sql = "SELECT a1.PlayerID as p1, a2.PlayerID as p2, "
+				+ "((a1.totalSuccessfulPassesAll + a1.assists)/a1.timePlayed - (a2.totalSuccessfulPassesAll + a2.assists)/a2.timePlayed) as peso "
+				+ "FROM Actions a1, Actions a2 "
+				+ "WHERE a1.MatchID = a2.MatchID "
+				+ "AND a1.MatchID = ? "
+				+ "AND a1.PlayerID > a2.PlayerID "
+				+ "AND a1.TeamID <> a2.TeamID";
+		
+		List<Adiacenza> result = new ArrayList<Adiacenza>();
+		Connection conn = DBConnect.getConnection();
+		
+		try {
 			PreparedStatement st = conn.prepareStatement(sql);
 			st.setInt(1, m.getMatchID());
-			ResultSet rs = st.executeQuery();
-			
-			while(rs.next()) {
-				if(!idMap.containsKey(rs.getInt("PlayerID"))) {
-					Player p = new Player(rs.getInt("PlayerID"),rs.getString("Name"));
-					idMap.put(p.getPlayerID(), p);
+			ResultSet res = st.executeQuery();
+			while (res.next()) {
+				if(idMap.containsKey(res.getInt("p1")) && idMap.containsKey(res.getInt("p2"))) {
+					result.add(new Adiacenza(idMap.get(res.getInt("p1")), idMap.get(res.getInt("p2")), res.getDouble("peso")));
 				}
 			}
-			conn.close();
 			
-		}catch(SQLException e) {
+			conn.close();
+			return result;
+		} catch (SQLException e) {
 			e.printStackTrace();
-			System.out.println("Errore connessione al database");
-			throw new RuntimeException("Error Connection Database");
+			return null;
 		}
-		
 	}
 	
-	public List<Adiacenza> getArchi(Match m, Map<Integer,Player>idMap){
-		String sql ="SELECT a1.PlayerID as p1, a2.PlayerID as p2, ABS (((a1.TotalSuccessfulPassesAll+ a1.Assists)/ a1.TimePlayed)-((a2.TotalSuccessfulPassesAll+ a2.Assists)/ a2.TimePlayed))AS e "
-				+ "FROM actions a1, actions a2 "
-				+ "WHERE a1.PlayerID > a2.PlayerID "
-				+ "AND a1.MatchID = ? AND a1.MatchID = a2.MatchID "
-				+ "AND a1.TeamID != a2.TeamID";
-		List<Adiacenza> result = new ArrayList<>();
-		
-		try {
-			Connection conn = DBConnect.getConnection();
-			PreparedStatement st = conn.prepareStatement(sql);
-			st.setInt(1, m.getMatchID());
-			ResultSet rs = st.executeQuery();
-			
-			while(rs.next()) {
-			  result.add(new Adiacenza(idMap.get(rs.getInt("p1")),idMap.get(rs.getInt("p2")),rs.getInt("e")));
-			}
-			conn.close();
-			
-		}catch(SQLException e) {
-			e.printStackTrace();
-			System.out.println("Errore connessione al database");
-			throw new RuntimeException("Error Connection Database");
-		}
-		return result;
+	
+	
 	}
 	
-}
+	
+

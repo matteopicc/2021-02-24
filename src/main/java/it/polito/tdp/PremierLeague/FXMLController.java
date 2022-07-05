@@ -48,15 +48,15 @@ public class FXMLController {
     @FXML
     void doCreaGrafo(ActionEvent event) {
     	txtResult.clear();
-    	Match m = this.cmbMatch.getValue();
+    	Match m = cmbMatch.getValue();
     	if(m == null) {
-    		txtResult.appendText("Selezionare un match per costruire il grafo\n");
+    		txtResult.appendText("Selezionare un match dal menu a tendina\n");
     		return;
     	}
     	this.model.creaGrafo(m);
-    	txtResult.appendText("grafo creato\n");
-    	txtResult.appendText("#Vertici : "+this.model.getNVertici()+"\n");
-    	txtResult.appendText("#Archi : "+this.model.getNArchi()+"\n");
+    	txtResult.appendText("GRAFO CREATO!\n");
+    	txtResult.appendText("#VERTICI : "+this.model.nVertici()+"\n");
+    	txtResult.appendText("#ARCHI : "+this.model.nArchi()+"\n");
     	
     }
 
@@ -64,10 +64,10 @@ public class FXMLController {
     void doGiocatoreMigliore(ActionEvent event) {
     	txtResult.clear();
     	if(this.model.grafoCreato()==false) {
-    		txtResult.appendText("Impossibile accedere a questa funzione senza avere il grafico\n");
+    		txtResult.appendText("Prima di fare questa operazione è necessario creare il grafo\n");
     		return;
     	}
-    	txtResult.appendText(this.model.deltaPlayerMax());
+    	txtResult.appendText("GIOCATORE MIGLIORE:\n" + this.model.getBest());
     }
     
     @FXML
@@ -88,6 +88,6 @@ public class FXMLController {
     
     public void setModel(Model model) {
     	this.model = model;
-    	cmbMatch.getItems().addAll(model.getMatch());
+    	cmbMatch.getItems().addAll(model.getTuttiMatch());
     }
 }

@@ -8,95 +8,100 @@ import java.util.Map;
 import org.jgrapht.Graph;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleDirectedGraph;
 import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 
 import it.polito.tdp.PremierLeague.db.PremierLeagueDAO;
 
 public class Model {
 	private PremierLeagueDAO dao;
-	private Graph<Player,DefaultWeightedEdge>grafo;
-	private Map<Integer, Player> giocatori;
-	private List<Player> players;
-	private Map<Integer, Player> giocatori2;
+	private Graph<Player,DefaultWeightedEdge> grafo;
+	private Map<Integer,Player> idMap;
 	
 	public Model() {
-		dao = new PremierLeagueDAO();
-		this.giocatori = new HashMap<Integer,Player>();
+		this.dao = new PremierLeagueDAO();
+		this.idMap = new HashMap<Integer,Player>();
+		this.dao.listAllPlayers(idMap);
 	}
 	
-	public List<Match>getMatch(){
-		return dao.listAllMatches();
+	public List<Match> getTuttiMatch(){
+		return dao.getAllMatches();
 	}
 	
-	public void creaGrafo(Match m) {
-		this.grafo = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+	public void creaGrafo(Match match) {
+		this.grafo = new SimpleDirectedWeightedGraph<Player,DefaultWeightedEdge>(DefaultWeightedEdge.class);
+		//aggiungo vertici
+		Graphs.addAllVertices(this.grafo, dao.playersMatch(match));
 		
-		//vertici
-		dao.giocatoriPartita(giocatori, m);
-		this.players = new ArrayList<Player>(giocatori.values());
-		Graphs.addAllVertices(this.grafo, players);
-		
-		//archi
-		for(Adiacenza a: this.dao.getArchi(m, giocatori)) {
-			Graphs.addEdgeWithVertices(this.grafo, a.getP1(), a.getP2(),a.getPeso());
-		}
-		
-		System.out.println("grafo creato");
-		System.out.println("#Vertici : "+this.grafo.vertexSet().size());
-		System.out.println("#Archi : "+this.grafo.edgeSet().size());
-	}
-	
-	public Match partita(int idMatch) {
-		Match m  = null;
-		List<Match>lista = dao.listAllMatches();
-		for(Match match : lista) {
-			if(match.getMatchID()==idMatch) {
-				m = match;
+		//aggiungo archi
+		for(Adiacenza a : dao.getAdiacenze(match, idMap)) {
+			if(a.getPeso() >= 0) {
+				//p1 meglio di p2
+				if(grafo.containsVertex(a.getP1()) && grafo.containsVertex(a.getP2())) {
+					Graphs.addEdgeWithVertices(this.grafo, a.getP1(), 
+							a.getP2(), a.getPeso());
+				}
+			} else {
+				//p2 meglio di p1
+				if(grafo.containsVertex(a.getP1()) && grafo.containsVertex(a.getP2())) {
+					Graphs.addEdgeWithVertices(this.grafo, a.getP2(), 
+							a.getP1(), (-1) * a.getPeso());
+				}
 			}
 		}
-		return m;
 	}
-	
-	public String deltaPlayerMax(){
-		this.giocatori2 = new HashMap<Integer,Player>();
-		Player best = null;
-		int max=-10000;
-		for(Player p: this.grafo.vertexSet()) {
-			int deltaT=-100;
-			int deltaI=0;
-			int deltaU=0;
-			for(DefaultWeightedEdge e: this.grafo.outgoingEdgesOf(p)) {
-				deltaU += this.grafo.getEdgeWeight(e);
-			}
-			for(DefaultWeightedEdge f: this.grafo.incomingEdgesOf(p)) {
-				deltaI += this.grafo.getEdgeWeight(f);
-			}
-			deltaT = (deltaU)-(deltaI);
-			this.giocatori2.put(deltaT, p);
-		}
-		for(Integer i: giocatori2.keySet()) {
-			if(i>max) {
-				max=i;
-				best = giocatori2.get(max);
-			}
-		}
-		return best.toString() +" "+max;
-		
-	}
-	
-	public int getNVertici(){
+
+	public int nVertici() {
 		return this.grafo.vertexSet().size();
 	}
-	public int getNArchi(){
+	
+	public int nArchi() {
 		return this.grafo.edgeSet().size();
 	}
 	
 	public boolean grafoCreato() {
-		if(this.grafo==null) {
+		if(this.grafo == null) {
 			return false;
 		}
-		return true;
+		else {
+			return true;
+		}
 	}
+	
+	public GiocatoreMigliore getBest() {
+		if(grafo == null) {
+			return null;
+		}
+		
+		Player best = null;
+		Double maxDelta = (double) Integer.MIN_VALUE;
+		
+		for(Player p : this.grafo.vertexSet()) {
+			// calcolo la somma dei pesi degli archi uscenti
+			double pesoUscente = 0.0;
+			for(DefaultWeightedEdge edge : this.grafo.outgoingEdgesOf(p)) {
+				pesoUscente += this.grafo.getEdgeWeight(edge);
+			}
+			
+			// calcolo la somma dei pesi degli archi entranti
+			double pesoEntrante = 0.0;
+			for(DefaultWeightedEdge edge : this.grafo.incomingEdgesOf(p)) {
+				pesoEntrante += this.grafo.getEdgeWeight(edge);
+			}
+			
+			double delta = pesoUscente - pesoEntrante;
+			if(delta > maxDelta) {
+				best = p;
+				maxDelta = delta;
+			}
+		}
+		
+		return new GiocatoreMigliore (best,maxDelta);
+	}
+	
+	
+	
+	
 	
 	
 }
